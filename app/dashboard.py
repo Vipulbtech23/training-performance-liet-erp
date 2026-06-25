@@ -14,7 +14,7 @@ from scripts.send_email import Emailer
 # ================= CONFIG =================
 st.set_page_config(page_title="LIET ERP", layout="wide")
 
-df = pd.read_excel("output/final_rankings.xlsx")
+df = pd.read_excel("final_rankings.xlsx")
 df.columns = df.columns.str.strip()
 
 # CLEAN DATA
@@ -334,7 +334,7 @@ elif menu == "Certificates":
     st.subheader("📦 Bulk Download")
 
     if st.button("Generate ZIP"):
-        zip_path = "output/certificates_all.zip"
+        zip_path = "certificates_all.zip"
 
         with zipfile.ZipFile(zip_path, "w") as zipf:
             for _, row in df.iterrows():
