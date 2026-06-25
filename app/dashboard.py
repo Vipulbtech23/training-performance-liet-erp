@@ -14,7 +14,7 @@ from scripts.send_email import Emailer
 # ================= CONFIG =================
 st.set_page_config(page_title="LIET ERP", layout="wide")
 
-df = pd.read_excel("final_rankings.xlsx")
+df = pd.read_excel("/output/final_rankings.xlsx")
 df.columns = df.columns.str.strip()
 
 # CLEAN DATA
