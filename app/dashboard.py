@@ -4,6 +4,17 @@ import plotly.express as px
 import os
 import sys
 import zipfile
+import qrcode
+from datetime import datetime
+
+def generate_qr(subject):
+    data = f"{subject}|{datetime.now().date()}"
+    img = qrcode.make(data)
+
+    path = f"output/qr_{subject}.png"
+    img.save(path)
+
+    return path
 
 # ================= ROOT =================
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -13,8 +24,32 @@ from scripts.send_email import Emailer
 
 # ================= CONFIG =================
 st.set_page_config(page_title="LIET ERP", layout="wide")
+# ================= LOGIN =================
 
-df = pd.read_excel("/output/final_rankings.xlsx")
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "liet123"
+
+if not st.session_state.logged_in:
+
+    st.title("🔐 LIET ERP Admin Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            st.session_state.logged_in = True
+            st.success("Login Successful")
+            st.rerun()
+        else:
+            st.error("Invalid Username or Password")
+
+    st.stop()
+df = pd.read_excel("output/final_rankings.xlsx")
 df.columns = df.columns.str.strip()
 
 # CLEAN DATA
@@ -64,7 +99,11 @@ def ai_insight(row):
 EMAILER = None
 
 # ================= ROLE (NO LOGIN) =================
-role = "admin"
+st.sidebar.success("👤 Admin")
+
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.logged_in = False
+    st.rerun()
 
 # ================= MENU =================
 menu = st.sidebar.radio(
@@ -82,7 +121,8 @@ menu = st.sidebar.radio(
         "Top Performers",
         "AI Insights",
         "Placement Readiness",
-        "Download Center"
+        "Download Center",
+          "📌 QR Attendance"   # 🔥 ADD THIS
     ]
 )
 
@@ -359,6 +399,7 @@ elif menu == "Email Center":
     student = st.selectbox("Student", df["Name"])
     email_type = st.radio("Document Type", ["Gradecard", "Certificate"])
 
+    # ================= SINGLE EMAIL =================
     if st.button("Send Email") and EMAILER:
 
         row = df[df["Name"] == student].iloc[0]
@@ -370,3 +411,66 @@ elif menu == "Email Center":
             st.success("Email sent successfully")
         else:
             st.error("File not found")
+
+    st.markdown("---")
+
+    # ================= BULK EMAIL (ADDED) =================
+    st.subheader("🚀 Bulk Email System")
+
+    bulk_type = st.selectbox("Bulk Document Type", ["Gradecard", "Certificate"])
+
+    if st.button("Send Bulk Emails") and EMAILER:
+
+        success, failed = 0, 0
+
+        for _, row in df.iterrows():
+
+            try:
+                pdf_path = (
+                    get_gradecard(row["Name"])
+                    if bulk_type == "Gradecard"
+                    else get_certificate(row["Name"])
+                )
+
+                if pd.notna(row["Email"]) and os.path.exists(pdf_path):
+
+                    EMAILER.send_pdf(
+                        row["Email"],
+                        pdf_path,
+                        row["Name"]
+                    )
+                    success += 1
+                else:
+                    failed += 1
+
+            except:
+                failed += 1
+
+        st.success(f"✅ Success: {success}")
+        st.error(f"❌ Failed: {failed}")
+elif menu == "📌 QR Attendance":
+
+    st.title("📌 QR Attendance System")
+
+    st.subheader("🧑‍🏫 Generate Attendance QR")
+
+    subject = st.text_input("Enter Subject Name")
+
+    if st.button("Generate QR Code") and subject:
+
+        qr_path = generate_qr(subject)
+
+        st.success("QR Generated Successfully")
+        st.image(qr_path, caption="Student Scan This QR")
+
+    st.markdown("---")
+
+    st.subheader("📊 Attendance Log")
+
+    if os.path.exists("attendance_log.csv"):
+
+        att_df = pd.read_csv("attendance_log.csv")
+        st.dataframe(att_df)
+
+    else:
+        st.warning("No attendance data found yet")        
