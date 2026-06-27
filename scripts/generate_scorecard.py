@@ -49,7 +49,7 @@ normal = styles["Normal"]
 
 LOGO_PATH = "assets/mllogo.png"
 SIGN_PATH = "assets/signature.png"
-
+DEAN_SIGN_PATH = "assets/Dean_Signature.png"
 os.makedirs("output/gradecards", exist_ok=True)
 os.makedirs("output/qrcodes", exist_ok=True)
 
@@ -110,8 +110,8 @@ def generate_qr(data, name):
 # =========================
 def draw_watermark(c, doc):
     c.saveState()
-    c.setFont("Helvetica-Bold", 55)
-    c.setFillColorRGB(0.92, 0.92, 0.92)
+    c.setFont("Helvetica-Bold", 60)
+    c.setFillColorRGB(0.8, 0.8, 0.8)
     c.translate(300, 400)
     c.rotate(45)
     c.drawCentredString(0, 0, "LIET TRAINING")
@@ -121,33 +121,93 @@ def draw_watermark(c, doc):
 # =========================
 # BORDER + SIGNATURE (UPDATED)
 # =========================
+# =========================
+# BORDER + LOGO + TWO SIGNATURES
+# =========================
 def draw_decor(c, doc):
+
+    # Outer Border
     c.setStrokeColor(colors.black)
-    c.setLineWidth(1)
-    c.rect(15, 15, A4[0] - 30, A4[1] - 30)
+    c.setLineWidth(1.2)
+    c.rect(15, 15, A4[0]-30, A4[1]-30)
 
-    # COORDINATOR TEXT (signature label)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(40, 60, "Training Coordinator Signature")
+    # -------------------------------
+    # Header Logos (Left + Right)
+    # -------------------------------
 
-    # SIGN IMAGE
-    if os.path.exists(SIGN_PATH):
+    if os.path.exists(LOGO_PATH):
         c.drawImage(
-            SIGN_PATH,
-            A4[0] - 170,
-            45,
-            width=120,
-            height=60,
+            LOGO_PATH,
+            25,
+            A4[1]-90,
+            width=55,
+            height=55,
+            preserveAspectRatio=True,
             mask='auto'
         )
 
-    c.setFont("Helvetica-Bold", 8)
+        c.drawImage(
+            LOGO_PATH,
+            A4[0]-80,
+            A4[1]-90,
+            width=55,
+            height=55,
+            preserveAspectRatio=True,
+            mask='auto'
+        )
+
+    # -------------------------------
+    # Footer Line
+    # -------------------------------
+
+    c.setStrokeColor(colors.grey)
+    c.line(35,95,A4[0]-35,95)
+
+    # =====================================================
+    # LEFT SIDE → DEAN SIGNATURE
+    # =====================================================
+
+    if os.path.exists(DEAN_SIGN_PATH):
+
+        c.drawImage(
+            DEAN_SIGN_PATH,
+            55,
+            35,
+            width=120,
+            height=55,
+            preserveAspectRatio=True,
+            mask='auto'
+        )
+
+    c.setFont("Helvetica-Bold",9)
     c.drawCentredString(
-        A4[0] - 110,
-        35,
-        "Training Coordinator Signature"
+        115,
+        28,
+        "Dean Signature"
     )
 
+    # =====================================================
+    # RIGHT SIDE → TRAINING COORDINATOR
+    # =====================================================
+
+    if os.path.exists(SIGN_PATH):
+
+        c.drawImage(
+            SIGN_PATH,
+            A4[0]-180,
+            35,
+            width=120,
+            height=55,
+            preserveAspectRatio=True,
+            mask='auto'
+        )
+
+    c.setFont("Helvetica-Bold",9)
+    c.drawCentredString(
+        A4[0]-120,
+        28,
+        "Training Coordinator"
+    )
 
 # =========================
 # GENERATE GRADECARDS

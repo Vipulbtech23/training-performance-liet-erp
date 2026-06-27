@@ -3,8 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-import cv2
-from datetime import datetime
+import datetime
 
 # ================= CONFIG =================
 st.set_page_config(
@@ -63,12 +62,12 @@ page = st.sidebar.radio(
     "Navigation",
     [
         "🏠 Dashboard",
-        "📊 Performance",
+        
         "Downloads",
         "🤖 AI Assistant",
         "👤 Profile",
         "⚙ Settings",
-        "📌 Attendance"   # 🔥 ADD THIS
+        "📌 Attendance"
     ]
 )
 
@@ -80,61 +79,7 @@ def get_gradecard(name):
 def get_certificate(name):
     safe = name.strip().replace(" ", "_")
     return f"output/certificates/{safe}_certificate.pdf"
-import cv2
 
-def scan_qr():
-    cap = cv2.VideoCapture(0)
-    detector = cv2.QRCodeDetector()
-
-    st.info("📷 Scanning QR... Press Q to stop")
-
-    while True:
-        ret, frame = cap.read()
-
-        if not ret:
-            break
-
-        data, bbox, _ = detector.detectAndDecode(frame)
-
-        if data:
-            cap.release()
-            cv2.destroyAllWindows()
-            return data
-
-        cv2.imshow("QR Scanner", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-    return None
-def mark_attendance(student, qr_data):
-    try:
-        subject, date = qr_data.split("|")
-
-        record = {
-            "Name": student["Name"],
-            "Email": student["Email"],
-            "Subject": subject,
-            "Date": date,
-            "Time": str(datetime.now())
-        }
-
-        file = "attendance_log.csv"
-
-        if os.path.exists(file):
-            df = pd.read_csv(file)
-            df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
-        else:
-            df = pd.DataFrame([record])
-
-        df.to_csv(file, index=False)
-
-        return True
-
-    except:
-        return False
 # ================= DASHBOARD =================
 if page == "🏠 Dashboard":
 
@@ -384,40 +329,6 @@ elif page == "👤 Profile":
     st.write("Grade:", student["Grade"])
     st.write("Rank:", student["Rank"])
     st.write("CGPA:", student["CGPA"])
-    st.markdown("---")    
-elif page == "📌 Attendance":
-
-    st.title("📌 Student Attendance System")
-
-    st.subheader("📷 Scan QR to Mark Attendance")
-
-    if st.button("Start QR Scanner"):
-
-        qr_data = scan_qr()
-
-        if qr_data:
-
-            success = mark_attendance(student, qr_data)
-
-            if success:
-                st.success("✅ Attendance Marked Successfully!")
-                st.write("Data:", qr_data)
-            else:
-                st.error("❌ Invalid QR Code")
-
-        else:
-            st.warning("No QR detected")
-
     st.markdown("---")
 
-    st.subheader("📊 My Attendance Log")
-
-    if os.path.exists("attendance_log.csv"):
-
-        att_df = pd.read_csv("attendance_log.csv")
-        user_log = att_df[att_df["Email"] == student["Email"]]
-
-        st.dataframe(user_log)
-
-    else:
-        st.info("No attendance recorded yet")    
+  

@@ -4,18 +4,8 @@ import plotly.express as px
 import os
 import sys
 import zipfile
-import qrcode
-from datetime import datetime
-
-def generate_qr(subject):
-    data = f"{subject}|{datetime.now().date()}"
-    img = qrcode.make(data)
-
-    path = f"output/qr_{subject}.png"
-    img.save(path)
-
-    return path
-
+import datetime
+ATTENDANCE_FILE = "output/attendance.csv"
 # ================= ROOT =================
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(ROOT_DIR)
@@ -122,7 +112,7 @@ menu = st.sidebar.radio(
         "AI Insights",
         "Placement Readiness",
         "Download Center",
-          "📌 QR Attendance"   # 🔥 ADD THIS
+        "Attendance"
     ]
 )
 
@@ -448,29 +438,73 @@ elif menu == "Email Center":
 
         st.success(f"✅ Success: {success}")
         st.error(f"❌ Failed: {failed}")
-elif menu == "📌 QR Attendance":
+# ================= ATTENDANCE SYSTEM =================
+elif menu == "Attendance":
 
-    st.title("📌 QR Attendance System")
+    st.title("📌 Attendance Marking System")
 
-    st.subheader("🧑‍🏫 Generate Attendance QR")
+    today = str(datetime.date.today())
 
-    subject = st.text_input("Enter Subject Name")
+    st.subheader(f"📅 Date: {today}")
 
-    if st.button("Generate QR Code") and subject:
-
-        qr_path = generate_qr(subject)
-
-        st.success("QR Generated Successfully")
-        st.image(qr_path, caption="Student Scan This QR")
-
-    st.markdown("---")
-
-    st.subheader("📊 Attendance Log")
-
-    if os.path.exists("attendance_log.csv"):
-
-        att_df = pd.read_csv("attendance_log.csv")
-        st.dataframe(att_df)
-
+    # Load or create attendance file
+    if os.path.exists(ATTENDANCE_FILE):
+        att_df = pd.read_csv(ATTENDANCE_FILE)
     else:
-        st.warning("No attendance data found yet")        
+        att_df = pd.DataFrame(columns=["Name", "Email", "Date", "Status"])
+
+    st.info("Tick Present / Absent for students")
+
+    # Store attendance for today
+    attendance_data = []
+
+    for i, row in df.iterrows():
+
+        col1, col2, col3 = st.columns([3, 3, 2])
+
+        with col1:
+            st.write(row["Name"])
+
+        with col2:
+            status = st.radio(
+                "Status",
+                ["Present", "Absent"],
+                key=f"{row['Email']}_{today}_{i}"
+            )
+
+        attendance_data.append({
+            "Name": row["Name"],
+            "Email": row["Email"],
+            "Date": today,
+            "Status": status
+        })
+
+    if st.button("💾 Save Attendance"):
+
+        new_df = pd.DataFrame(attendance_data)
+
+        # Remove today's old record (avoid duplicates)
+        if len(att_df) > 0:
+            att_df = att_df[att_df["Date"] != today]
+
+        final_df = pd.concat([att_df, new_df], ignore_index=True)
+
+        final_df.to_csv(ATTENDANCE_FILE, index=False)
+
+        st.success("✅ Attendance Saved Successfully")
+    st.markdown("---")
+    st.subheader("📥 Download Attendance Report")
+
+ATTENDANCE_FILE = "output/attendance.csv"
+
+if os.path.exists(ATTENDANCE_FILE):
+
+    with open(ATTENDANCE_FILE, "rb") as f:
+        st.download_button(
+            "⬇ Download Attendance CSV",
+            f,
+            file_name="attendance_report.csv",
+            mime="text/csv"
+        )
+else:
+    st.warning("No attendance data found yet")   
