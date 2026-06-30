@@ -11,7 +11,7 @@ from io import BytesIO
 from pathlib import Path
 import firebase_admin
 from firebase_admin import credentials, firestore
-BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 
 ATTENDANCE_FILE = "output/attendance.csv"
