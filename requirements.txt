@@ -7,3 +7,10 @@ plotly
 pillow
 google-generativeai
 reportlab
+qrcode
+opencv-python
+pyzbar
+firebase-admin
+qrcode
+pillow
+streamlit-qrcode-scanner
