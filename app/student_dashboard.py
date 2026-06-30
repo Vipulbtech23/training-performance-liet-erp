@@ -4,6 +4,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 import datetime
+import firebase_admin
+from firebase_admin import credentials, firestore
+from streamlit_qrcode_scanner import qrcode_scanner
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ================= CONFIG =================
 st.set_page_config(
@@ -11,8 +17,70 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# ================= FIREBASE =================
+def init_firebase():
+    if not firebase_admin._apps:
 
-# ================= CSS =================
+        cred = credentials.Certificate(BASE_DIR / "firebase_key.json")
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
+
+db = init_firebase()
+
+def safe_id(value):
+    return str(value).replace("@", "_at_").replace(".", "_").replace("/", "_")
+
+@firestore.transactional
+def punch_attendance(transaction, session_ref, record_ref, student_data):
+    session_snap = session_ref.get(transaction=transaction)
+
+    if not session_snap.exists:
+        return False, "Invalid QR code"
+
+    data = session_snap.to_dict()
+
+    if not data.get("is_active", False):
+        return False, "QR is closed by admin"
+
+    max_scans = int(data.get("max_scans", 0))
+    scanned_count = int(data.get("scanned_count", 0))
+
+    student_key = safe_id(student_data["email"])
+    attendees = data.get("attendees", {})
+
+    if student_key in attendees:
+        return False, "Attendance already punched from this QR"
+
+    if scanned_count >= max_scans:
+        return False, "QR scan limit completed"
+
+    punch_data = {
+        "name": student_data["name"],
+        "email": student_data["email"],
+        "rank": student_data["rank"],
+        "percentage": student_data["percentage"],
+        "punch_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    transaction.update(session_ref, {
+        "scanned_count": firestore.Increment(1),
+        f"attendees.{student_key}": punch_data
+    })
+
+    transaction.set(record_ref, {
+        "session_token": data.get("token"),
+        "class_name": data.get("class_name"),
+        "module": data.get("module"),
+        "name": student_data["name"],
+        "email": student_data["email"],
+        "rank": student_data["rank"],
+        "percentage": student_data["percentage"],
+        "status": "Present",
+        "punch_time": firestore.SERVER_TIMESTAMP
+    })
+
+    return True, "Attendance punched successfully"
+# ================= CSS =================N
 with open("styles/style.css") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
@@ -79,6 +147,7 @@ def get_gradecard(name):
 def get_certificate(name):
     safe = name.strip().replace(" ", "_")
     return f"output/certificates/{safe}_certificate.pdf"
+
 
 # ================= DASHBOARD =================
 if page == "🏠 Dashboard":
@@ -331,4 +400,83 @@ elif page == "👤 Profile":
     st.write("CGPA:", student["CGPA"])
     st.markdown("---")
 
-  
+elif page == "📌 Attendance":
+
+    st.title("📌 QR Attendance")
+
+    st.info("Admin ERP se generated QR scan karo. Ek student ek QR se sirf ek baar attendance laga sakta hai.")
+
+    student_data = {
+        "name": str(student["Name"]),
+        "email": str(student["Email"]).strip().lower(),
+        "rank": str(student["Rank"]),
+        "percentage": str(student["Percentage"])
+    }
+
+    st.success(f"Logged in as: {student_data['name']}")
+
+    st.markdown("---")
+
+    st.subheader("📷 Scan QR Code")
+
+    try:
+        qr_token = qrcode_scanner(key="student_qr_scanner")
+    except Exception as e:
+        qr_token = None
+        st.warning("Camera scanner open nahi ho raha. Please token manually paste karo.")
+        st.caption(str(e))
+
+    manual_token = st.text_input("QR scan na ho to token paste karo")
+
+    token = qr_token or manual_token
+
+    if token:
+        st.write("Detected QR Token:")
+        st.code(token)
+
+        if st.button("✅ Punch Attendance"):
+
+            session_ref = db.collection("attendance_sessions").document(token.strip())
+
+            record_id = f"{token.strip()}_{safe_id(student_data['email'])}"
+            record_ref = db.collection("attendance_records").document(record_id)
+
+            transaction = db.transaction()
+
+            success, msg = punch_attendance(
+                transaction,
+                session_ref,
+                record_ref,
+                student_data
+            )
+
+            if success:
+                st.success("✅ " + msg)
+            else:
+                st.warning("⚠️ " + msg)
+
+    st.markdown("---")
+
+    st.subheader("📊 My Attendance Records")
+
+    records = (
+        db.collection("attendance_records")
+        .where("email", "==", student_data["email"])
+        .stream()
+    )
+
+    my_rows = []
+
+    for r in records:
+        d = r.to_dict()
+        my_rows.append({
+            "Class": d.get("class_name"),
+            "Module": d.get("module"),
+            "Status": d.get("status"),
+            "Punch Time": str(d.get("punch_time"))
+        })
+
+    if my_rows:
+        st.dataframe(pd.DataFrame(my_rows), use_container_width=True)
+    else:
+        st.info("No attendance records found.")
