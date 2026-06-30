@@ -5,6 +5,15 @@ import os
 import sys
 import zipfile
 import datetime
+import uuid
+import qrcode
+from io import BytesIO
+from pathlib import Path
+import firebase_admin
+from firebase_admin import credentials, firestore
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
 ATTENDANCE_FILE = "output/attendance.csv"
 # ================= ROOT =================
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -14,6 +23,14 @@ from scripts.send_email import Emailer
 
 # ================= CONFIG =================
 st.set_page_config(page_title="LIET ERP", layout="wide")
+# ================= FIREBASE =================
+def init_firebase():
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(BASE_DIR / "firebase_key.json")
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
+
+db = init_firebase()
 # ================= LOGIN =================
 
 if "logged_in" not in st.session_state:
@@ -438,73 +455,138 @@ elif menu == "Email Center":
 
         st.success(f"✅ Success: {success}")
         st.error(f"❌ Failed: {failed}")
-# ================= ATTENDANCE SYSTEM =================
+# ================= QR ATTENDANCE SYSTEM =================
 elif menu == "Attendance":
 
-    st.title("📌 Attendance Marking System")
+    st.title("📌 QR Attendance System")
 
-    today = str(datetime.date.today())
+    tab1, tab2 = st.tabs(["Generate QR", "Live Attendance Records"])
 
-    st.subheader(f"📅 Date: {today}")
+    # ================= GENERATE QR =================
+    with tab1:
+        st.subheader("🎯 Generate Attendance QR")
 
-    # Load or create attendance file
-    if os.path.exists(ATTENDANCE_FILE):
-        att_df = pd.read_csv(ATTENDANCE_FILE)
-    else:
-        att_df = pd.DataFrame(columns=["Name", "Email", "Date", "Status"])
+        class_name = st.text_input("Class / Batch", "LIET Bootcamp Training")
+        module = st.text_input("Module / Subject", "Python Training")
 
-    st.info("Tick Present / Absent for students")
+        max_scans = st.number_input(
+            "Maximum Students Allowed",
+            min_value=1,
+            max_value=500,
+            value=30
+        )
 
-    # Store attendance for today
-    attendance_data = []
+        if st.button("Generate QR"):
+            token = str(uuid.uuid4())
 
-    for i, row in df.iterrows():
+            db.collection("attendance_sessions").document(token).set({
+                "token": token,
+                "class_name": class_name,
+                "module": module,
+                "max_scans": int(max_scans),
+                "scanned_count": 0,
+                "is_active": True,
+                "attendees": {},
+                "created_at": firestore.SERVER_TIMESTAMP
+            })
 
-        col1, col2, col3 = st.columns([3, 3, 2])
+            qr_img = qrcode.make(token)
 
-        with col1:
-            st.write(row["Name"])
+            buffer = BytesIO()
+            qr_img.save(buffer, format="PNG")
 
-        with col2:
-            status = st.radio(
-                "Status",
-                ["Present", "Absent"],
-                key=f"{row['Email']}_{today}_{i}"
+            st.success("✅ QR Generated Successfully")
+            st.image(buffer.getvalue(), width=300)
+
+            st.write("QR Token:")
+            st.code(token)
+
+            st.download_button(
+                "⬇ Download QR Image",
+                buffer.getvalue(),
+                file_name="attendance_qr.png",
+                mime="image/png"
             )
 
-        attendance_data.append({
-            "Name": row["Name"],
-            "Email": row["Email"],
-            "Date": today,
-            "Status": status
-        })
+    # ================= LIVE RECORDS =================
+    with tab2:
+        st.subheader("📊 QR Attendance Sessions")
 
-    if st.button("💾 Save Attendance"):
+        sessions = db.collection("attendance_sessions").stream()
 
-        new_df = pd.DataFrame(attendance_data)
+        session_rows = []
 
-        # Remove today's old record (avoid duplicates)
-        if len(att_df) > 0:
-            att_df = att_df[att_df["Date"] != today]
+        for s in sessions:
+            d = s.to_dict()
+            session_rows.append({
+                "Token": d.get("token"),
+                "Class": d.get("class_name"),
+                "Module": d.get("module"),
+                "Max Scans": d.get("max_scans"),
+                "Scanned": d.get("scanned_count"),
+                "Active": d.get("is_active")
+            })
 
-        final_df = pd.concat([att_df, new_df], ignore_index=True)
+        if len(session_rows) == 0:
+            st.warning("No QR attendance session found.")
+        else:
+            session_df = pd.DataFrame(session_rows)
+            st.dataframe(session_df, use_container_width=True)
 
-        final_df.to_csv(ATTENDANCE_FILE, index=False)
+            selected_token = st.selectbox(
+                "Select QR Session",
+                session_df["Token"].tolist()
+            )
 
-        st.success("✅ Attendance Saved Successfully")
-    st.markdown("---")
-    st.subheader("📥 Download Attendance Report")
+            session_doc = db.collection("attendance_sessions").document(selected_token).get()
 
-ATTENDANCE_FILE = "output/attendance.csv"
+            if session_doc.exists:
+                data = session_doc.to_dict()
+                attendees = data.get("attendees", {})
 
-if os.path.exists(ATTENDANCE_FILE):
+                st.markdown("---")
+                st.subheader("👨‍🎓 Present Students")
 
-    with open(ATTENDANCE_FILE, "rb") as f:
-        st.download_button(
-            "⬇ Download Attendance CSV",
-            f,
-            file_name="attendance_report.csv",
-            mime="text/csv"
-        )
-else:
-    st.warning("No attendance data found yet")   
+                attendance_rows = []
+
+                for student_key, info in attendees.items():
+                    attendance_rows.append({
+                        "Name": info.get("name"),
+                        "Email": info.get("email"),
+                        "Rank": info.get("rank"),
+                        "Percentage": info.get("percentage"),
+                        "Punch Time": info.get("punch_time")
+                    })
+
+                if attendance_rows:
+                    att_df = pd.DataFrame(attendance_rows)
+                    st.dataframe(att_df, use_container_width=True)
+
+                    csv_data = att_df.to_csv(index=False).encode("utf-8")
+
+                    st.download_button(
+                        "⬇ Download Attendance CSV",
+                        csv_data,
+                        file_name="qr_attendance_report.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.info("No student has punched attendance yet.")
+
+                c1, c2 = st.columns(2)
+
+                with c1:
+                    if st.button("🔒 Close This QR"):
+                        db.collection("attendance_sessions").document(selected_token).update({
+                            "is_active": False
+                        })
+                        st.success("QR Closed Successfully")
+                        st.rerun()
+
+                with c2:
+                    if st.button("🔓 Reopen This QR"):
+                        db.collection("attendance_sessions").document(selected_token).update({
+                            "is_active": True
+                        })
+                        st.success("QR Reopened Successfully")
+                        st.rerun()
