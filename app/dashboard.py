@@ -26,8 +26,15 @@ st.set_page_config(page_title="LIET ERP", layout="wide")
 # ================= FIREBASE =================
 def init_firebase():
     if not firebase_admin._apps:
-        cred = credentials.Certificate(BASE_DIR / "firebase_key.json")
+        if "firebase" in st.secrets:
+            cred = credentials.Certificate(dict(st.secrets["firebase"]))
+        else:
+            from pathlib import Path
+            BASE_DIR = Path(__file__).resolve().parent.parent
+            cred = credentials.Certificate(BASE_DIR / "firebase_key.json")
+
         firebase_admin.initialize_app(cred)
+
     return firestore.client()
 
 db = init_firebase()
