@@ -24,16 +24,17 @@ from scripts.send_email import Emailer
 # ================= CONFIG =================
 st.set_page_config(page_title="LIET ERP", layout="wide")
 # ================= FIREBASE =================
+# ================= FIREBASE =================
 def init_firebase():
     if not firebase_admin._apps:
-        if "firebase" in st.secrets:
-            cred = credentials.Certificate(dict(st.secrets["firebase"]))
-        else:
-            from pathlib import Path
-            BASE_DIR = Path(__file__).resolve().parent.parent
-            cred = credentials.Certificate(BASE_DIR / "firebase_key.json")
-
-        firebase_admin.initialize_app(cred)
+        try:
+            firebase_config = dict(st.secrets["firebase"])
+            cred = credentials.Certificate(firebase_config)
+            firebase_admin.initialize_app(cred)
+        except Exception as e:
+            st.error("Firebase secrets not found or not configured correctly.")
+            st.code(str(e))
+            st.stop()
 
     return firestore.client()
 
