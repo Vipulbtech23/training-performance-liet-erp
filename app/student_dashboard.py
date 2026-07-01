@@ -435,9 +435,9 @@ elif page == "📌 Attendance":
       st.warning("Camera scanner open nahi ho raha. Token manually paste karo.")
       st.caption(str(e))
 
-     manual_token = st.text_input("QR scan na ho to token paste karo")
+    manual_token = st.text_input("QR scan na ho to token paste karo")
 
-     token = qr_token or manual_token
+    token = qr_token or manual_token
 
     if token:
         st.write("Detected QR Token:")
