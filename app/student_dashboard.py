@@ -18,13 +18,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 # ================= FIREBASE =================
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 def init_firebase():
     if not firebase_admin._apps:
-        if "firebase" in st.secrets:
-            cred = credentials.Certificate(dict(st.secrets["firebase"]))
-        else:
-            from pathlib import Path
-            BASE_DIR = Path(__file__).resolve().parent.parent
+        try:
+            firebase_config = dict(st.secrets["firebase"])
+            cred = credentials.Certificate(firebase_config)
+        except Exception:
             cred = credentials.Certificate(BASE_DIR / "firebase_key.json")
 
         firebase_admin.initialize_app(cred)
@@ -32,7 +35,6 @@ def init_firebase():
     return firestore.client()
 
 db = init_firebase()
-
 def safe_id(value):
     return str(value).replace("@", "_at_").replace(".", "_").replace("/", "_")
 
