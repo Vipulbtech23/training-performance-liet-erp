@@ -427,16 +427,17 @@ elif page == "📌 Attendance":
 
     st.subheader("📷 Scan QR Code")
 
+    qr_token = None
+
     try:
-        qr_token = qrcode_scanner(key="student_qr_scanner")
+      qr_token = qrcode_scanner(key="student_qr_scanner")
     except Exception as e:
-        qr_token = None
-        st.warning("Camera scanner open nahi ho raha. Please token manually paste karo.")
-        st.caption(str(e))
+      st.warning("Camera scanner open nahi ho raha. Token manually paste karo.")
+      st.caption(str(e))
 
-    manual_token = st.text_input("QR scan na ho to token paste karo")
+     manual_token = st.text_input("QR scan na ho to token paste karo")
 
-    token = qr_token or manual_token
+     token = qr_token or manual_token
 
     if token:
         st.write("Detected QR Token:")
